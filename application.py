@@ -4,13 +4,13 @@ import ant
 import math
 
 class Application(tk.Tk):
-    NB_ANTS = 200
-    CANVAS_WIDTH = 600
-    CANVAS_HEIGHT = 400
-    ANTHILL_XPOS = 100
-    ANTHILL_YPOS = 100
-    FOOD_XPOS = 200
-    FOOD_YPOS = 200
+    NB_ANTS = 1000
+    CANVAS_WIDTH = 800
+    CANVAS_HEIGHT = 600
+    ANTHILL_XPOS = 400
+    ANTHILL_YPOS = 300
+    FOOD_XPOS = 250
+    FOOD_YPOS = 300
     FOOD_PHEROMONE_DISTANCE = 50
     DISSOLVE_TIME = 50
     def __init__(self):
@@ -19,8 +19,8 @@ class Application(tk.Tk):
         self.create_canvas()
         self.create_widget()
         # Ant world
-        self.food_pheromone_map = np.zeros((self.CANVAS_WIDTH, self.CANVAS_HEIGHT), dtype=int)
-        self.home_pheromone_map = np.zeros((self.CANVAS_WIDTH, self.CANVAS_HEIGHT), dtype=int)
+        self.food_pheromone_map = np.zeros((self.CANVAS_WIDTH, self.CANVAS_HEIGHT), dtype=float)
+        self.home_pheromone_map = np.zeros((self.CANVAS_WIDTH, self.CANVAS_HEIGHT), dtype=float)
         self.food_map = np.zeros((self.CANVAS_WIDTH, self.CANVAS_HEIGHT), dtype=int)
         self.init_food()
         self.home_map = np.zeros((self.CANVAS_WIDTH, self.CANVAS_HEIGHT), dtype=int)
@@ -31,7 +31,7 @@ class Application(tk.Tk):
                                              self.food_pheromone_map, self.home_pheromone_map,\
                                              self.food_map, self.home_map,\
                                             (self.ANTHILL_XPOS, self.ANTHILL_YPOS)))
-        self.time_to_dissolve = 10
+        self.time_to_dissolve = 100
         # Initial display
         self.display_anthill()
         self.display_food_pheromone()
@@ -67,14 +67,14 @@ class Application(tk.Tk):
 
     def release_all_ants(self):
         for i in range(self.NB_ANTS):
-            self.ant_list[i].status = self.ant_list[i].STATUS_SEARCHING
+            self.ant_list[i].status = self.ant_list[i].STATUS_SEARCHING_FOOD
 
     def release_ant(self):
         change_made = False
         i = 0
         while change_made != True and i < self.NB_ANTS:
             if self.ant_list[i].status == self.ant_list[i].STATUS_INACTIVE:
-                self.ant_list[i].status = self.ant_list[i].STATUS_SEARCHING
+                self.ant_list[i].status = self.ant_list[i].STATUS_SEARCHING_FOOD
                 change_made = True
             i += 1
 
@@ -85,7 +85,7 @@ class Application(tk.Tk):
         i = 0
         while i < self.NB_ANTS and count < n:
             if self.ant_list[i].status == self.ant_list[i].STATUS_INACTIVE:
-                self.ant_list[i].status = self.ant_list[i].STATUS_SEARCHING
+                self.ant_list[i].status = self.ant_list[i].STATUS_SEARCHING_FOOD
                 count += 1
             i += 1
 
@@ -95,7 +95,7 @@ class Application(tk.Tk):
     def display_food_pheromone(self):
         for x in range(self.CANVAS_WIDTH):
             for y in range(self.CANVAS_HEIGHT):
-                intensity = self.food_pheromone_map[x][y]
+                intensity = int(self.food_pheromone_map[x][y])
                 if intensity != 0:
                     color = "#%02x%02x%02x" % tuple([255 - intensity, 255 - intensity, 255])
                     self.canvas.create_rectangle(x, y, x+1, y+1, outline=color, width=1, fill=color)
@@ -103,7 +103,7 @@ class Application(tk.Tk):
     def display_home_pheromone(self):
         for x in range(self.CANVAS_WIDTH):
             for y in range(self.CANVAS_HEIGHT):
-                intensity = self.home_pheromone_map[x][y]
+                intensity = int(self.home_pheromone_map[x][y])
                 if intensity != 0:
                     color = "#%02x%02x%02x" % tuple([255, 255 - intensity, 255 - intensity])
                     self.canvas.create_rectangle(x, y, x+1, y+1, outline=color, width=1, fill=color)
@@ -122,13 +122,15 @@ class Application(tk.Tk):
 
     def dissolve(self):
         if self.time_to_dissolve == 0:
+            print("dissolving")
+            amount = 2
             for i in range(self.CANVAS_WIDTH):
                 for j in range(self.CANVAS_HEIGHT):
-                    if self.home_pheromone_map[i][j] > 0:
-                        self.home_pheromone_map[i][j] -= 1
-                    if self.food_pheromone_map[i][j] > 0:
-                        self.food_pheromone_map[i][j] -= 1
-            self.time_to_dissolve == self.DISSOLVE_TIME
+                    if self.home_pheromone_map[i][j] > amount:
+                        self.home_pheromone_map[i][j] -= amount
+                    #if self.food_pheromone_map[i][j] > amount:
+                    #    self.food_pheromone_map[i][j] -= amount
+            self.time_to_dissolve = self.DISSOLVE_TIME
         else:
             self.time_to_dissolve -= 1
 
@@ -144,24 +146,26 @@ class Application(tk.Tk):
     def work(self):
         for i in range(self.NB_ANTS):
             ant = self.ant_list[i]
-            if ant.status == ant.STATUS_SEARCHING:
+            if ant.status == ant.STATUS_SEARCHING_FOOD:
                 # In any case, put pheromone to find your way home (if any)
                 ant.put_home_pheromone()
+                # Ant gets older
+                ant.life_cycle += 1
                 # Erasing causes pheromone to be visible again so we call erase after put_home_ pheromone
                 ant.erase()
+                # If you can, follow the hunting trail
+                if ant.detect(self.food_pheromone_map) != -1:
+                    ant.status = ant.STATUS_FOOD_TRACKING
+                # Otherwise go anywhere
+                else:
+                    ant.move_random()
+                ant.display()
+            elif ant.status == ant.STATUS_FOOD_TRACKING:
+                ant.erase()
+                ant.follow_trail()
                 #if ant touches food, change status
                 if ant.touch(self.food_map):
                     ant.status = ant.STATUS_GOING_HOME
-                # If you can, follow the hunting trail
-                direction = ant.detect(self.food_pheromone_map)
-                if direction != -1:
-                    coord = [(0,-1), (1,-1), (1,0), (1,1), (0,1), (-1,1), (-1,0), (-1,-1)]
-                    new_x = (ant.position[0] + coord[direction][0]) % self.CANVAS_WIDTH
-                    new_y = (ant.position[1] + coord[direction][1]) % self.CANVAS_HEIGHT
-                    ant.position = (new_x, new_y)
-                # Otherwise go anywhere
-                #else: !!!!!!!! AND is goood!
-                ant.move_random()
                 ant.display()
             elif ant.status == ant.STATUS_GOING_HOME:
                 # In any case, put pheromone to help friends find the food
@@ -172,15 +176,15 @@ class Application(tk.Tk):
                 if ant.touch(self.home_map):
                     ant.status = ant.STATUS_INACTIVE
                 # If you can, go home directly
-                #direction = ant.detect(self.home_pheromone_map)
-                #if direction != -1:
-                #    coord = [(0,-1), (1,-1), (1,0), (1,1), (0,1), (-1,1), (-1,0), (-1,-1)]
-                #    new_x = (ant.position[0] + coord[direction][0]) % self.CANVAS_WIDTH
-                #    new_y = (ant.position[1] + coord[direction][1]) % self.CANVAS_HEIGHT
-                #    ant.position = (new_x, new_y)
+                direction = ant.detect(self.home_pheromone_map)
+                if direction != -1:
+                    coord = [(0,-1), (1,-1), (1,0), (1,1), (0,1), (-1,1), (-1,0), (-1,-1)]
+                    new_x = (ant.position[0] + coord[direction][0]) % self.CANVAS_WIDTH
+                    new_y = (ant.position[1] + coord[direction][1]) % self.CANVAS_HEIGHT
+                    ant.position = (new_x, new_y)
                     # Otherwise go anywhere
-                #else:
-                ant.move_random()
+                else:
+                    ant.move_random()
                 ant.display()
             elif ant.status == ant.STATUS_INACTIVE:
                 ant.erase()
