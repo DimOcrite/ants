@@ -4,7 +4,7 @@ import random
 class Ant():
     # Possible status
     STATUS_INACTIVE = 0
-    STATUS_SEARCHING = 1
+    STATUS_SEARCHING_FOOD = 1
     STATUS_FOOD_TRACKING = 2
     STATUS_EATING = 3
     STATUS_GOING_HOME = 4
@@ -41,13 +41,9 @@ class Ant():
         # rotation_sense is direct (1) or indirect (-1)
         self.rotation_sense = 1
         # inertia defines the probability of (no) direction change
-        self.inertia = 0.6
-        # rotation_velocity defines the amplitude of direction change (rad)
-        self.rotation_velocity = 0.15
-        # rotation_inertia defines the probability of change of sense of rotation 
-        self.rotation_inertia = 0.8
-        # amount of food the ant is carrying
+        self.inertia = 0.7
         self.carried_food = 0
+        self.life_cycle = 0
 
     def __str__(self):
         """This is overwriting method to 'write' an ant"""
@@ -65,8 +61,8 @@ class Ant():
         x = self.position[0]
         y = self.position[1]
         color = "white"
-        home_pheromone_intensity = self.home_pheromone_map[x][y]
-        food_pheromone_intensity = self.food_pheromone_map[x][y]
+        home_pheromone_intensity = int(self.home_pheromone_map[x][y])
+        food_pheromone_intensity = int(self.food_pheromone_map[x][y])
         if food_pheromone_intensity > home_pheromone_intensity:
             color = "#%02x%02x%02x" % tuple([255 - food_pheromone_intensity, 255 - food_pheromone_intensity, 255])
         elif home_pheromone_intensity != 0:
@@ -77,7 +73,8 @@ class Ant():
         """put home pheromone as long as the ant get some"""
         x = self.position[0]
         y = self.position[1]
-        quantity = self.PHEROMONE_RELEASE_QUANTITY
+        coef = math.exp(- self.life_cycle / 100)
+        quantity = self.PHEROMONE_RELEASE_QUANTITY * coef
         if self.home_pheromone_stock > quantity and self.home_pheromone_map[x][y] < (255 - quantity):
             self.home_pheromone_stock -= quantity
             self.home_pheromone_map[x][y] += quantity
@@ -85,8 +82,9 @@ class Ant():
     def put_food_pheromone(self):
         """put food pheromone as long as the ant get some"""
         x = self.position[0]
-        y = self.position[1]      
-        quantity = self.PHEROMONE_RELEASE_QUANTITY
+        y = self.position[1]
+        coef = math.exp(- self.life_cycle / 100)
+        quantity = self.PHEROMONE_RELEASE_QUANTITY * coef
         if self.food_pheromone_stock > quantity and self.food_pheromone_map[x][y] < (255 - quantity):
             self.food_pheromone_stock -= quantity
             self.food_pheromone_map[x][y] += quantity
@@ -105,6 +103,18 @@ class Ant():
         x = (x + math.cos(self.direction)) % self.canvas_width
         y = (y + math.sin(self.direction)) % self.canvas_height
         self.position = (x,y)
+
+    def follow_trail(self):
+        x = self.position[0]
+        y = self.position[1]
+        xmax = self.canvas_width
+        ymax = self.canvas_height
+        direction = self.detect(self.food_pheromone_map)
+        if direction != -1:
+            coord = [(0,-1), (1,-1), (1,0), (1,1), (0,1), (-1,1), (-1,0), (-1,-1)]
+            new_x = (x + coord[direction][0]) % xmax
+            new_y = (y + coord[direction][1]) % ymax
+            self.position = (new_x, new_y)
 
     def move_random(self):
         x = self.position[0]
@@ -159,50 +169,50 @@ class Ant():
         max_pheromone = []
         zone_pheromone = 0
         # north
-        for i in range(x - 1, x + 2):
-            for j in range(y - 3, y):
+        for i in range(x - 2, x + 3):
+            for j in range(y - 5, y):
                 zone_pheromone += pheromone_map[i % xmax][j % ymax]
         max_pheromone.append(zone_pheromone)
         zone_pheromone = 0
         # north east
-        for i in range(x +1, x + 4):
-            for j in range(y - 3, y):
+        for i in range(x + 1, x + 6):
+            for j in range(y - 5, y):
                 zone_pheromone += pheromone_map[i % xmax][j % ymax]
         max_pheromone.append(zone_pheromone)
         zone_pheromone = 0
         # east
-        for i in range(x + 1, x + 4):
-            for j in range(y - 1, y + 2):
+        for i in range(x + 1, x + 6):
+            for j in range(y - 2, y + 3):
                 zone_pheromone += pheromone_map[i % xmax][j % ymax]
         max_pheromone.append(zone_pheromone)
         zone_pheromone = 0
         # south east
-        for i in range(x + 1, x + 4):
-            for j in range(y + 1, y + 4):
+        for i in range(x + 1, x + 6):
+            for j in range(y + 1, y + 6):
                 zone_pheromone += pheromone_map[i % xmax][j % ymax]
         max_pheromone.append(zone_pheromone)
         zone_pheromone = 0
         # south
-        for i in range(x - 1, x + 2):
-            for j in range(y + 1, y + 4):
+        for i in range(x - 2, x + 3):
+            for j in range(y + 1, y + 6):
                 zone_pheromone += pheromone_map[i % xmax][j % ymax]
         max_pheromone.append(zone_pheromone)
         zone_pheromone = 0
         # south west
-        for i in range(x - 3, x):
-            for j in range(y + 1, y + 4):
+        for i in range(x - 5, x):
+            for j in range(y + 1, y + 6):
                 zone_pheromone += pheromone_map[i % xmax][j % ymax]
         max_pheromone.append(zone_pheromone)
         zone_pheromone = 0
         # west
-        for i in range(x - 3, x):
-            for j in range(y - 1, y + 2):
+        for i in range(x - 5, x):
+            for j in range(y - 2, y + 3):
                 zone_pheromone += pheromone_map[i % xmax][j % ymax]
         max_pheromone.append(zone_pheromone)
         zone_pheromone = 0
         # north west
-        for i in range(x - 3, x):
-            for j in range(y - 3, y):
+        for i in range(x - 5, x):
+            for j in range(y - 5, y):
                 zone_pheromone += pheromone_map[i % xmax][j % ymax]
         max_pheromone.append(zone_pheromone)
         # returns the best direction or -1 if nothing detected
@@ -211,6 +221,22 @@ class Ant():
             return max_pheromone.index(maximum)
         else:
             return -1
+
+
+    def detect_food(self):
+        """detect food up to one pixel and returns this pixel"""
+        x = int(self.position[0]) % self.canvas_width
+        y = int(self.position[1]) % self.canvas_height
+        if self.food_map[(x - 1) % self.canvas_width][(y - 1) % self.canvas_height] != 0 or \
+            self.food_map[x % self.canvas_width][(y - 1) % self.canvas_height] != 0 or \
+            self.food_map[(x + 1) % self.canvas_width][(y - 1) % self.canvas_height] != 0 or \
+            self.food_map[(x - 1) % self.canvas_width][y] != 0 or \
+            self.food_map[(x + 1) % self.canvas_width][y] != 0 or \
+            self.food_map[(x - 1) % self.canvas_width][(y + 1) % self.canvas_height] != 0 or \
+            self.food_map[x][(y + 1) % self.canvas_height] != 0 or \
+            self.food_map[(x + 1) % self.canvas_width][(y + 1) % self.canvas_height] != 0:
+            return True
+        else : return False
 
     def detect_home(self):
         """detect food up to one pixel and returns this pixel"""
